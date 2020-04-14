@@ -1,13 +1,6 @@
 const uuidv4 = require('uuid/v4');
 
-export default class RequestObject {
-    static Status = {
-        waiting:0,
-        executing:1,
-        completed:2,
-        failed:3
-    }
-
+class RequestObject {
     constructor({method = 'get',url = '',attempts = 1, params={},data = {},alias = null, continueWithFailure = false, onProgress = null, ...rest}={}){
         this.maxAttempts = attempts < 1 ? 1 : attempts;
         this.attempts = 0;
@@ -150,3 +143,12 @@ export default class RequestObject {
         this.rejectPromise(this.result);
     }
 }
+
+RequestObject.prototype.Status = {
+    waiting:0,
+    executing:1,
+    completed:2,
+    failed:3
+}
+
+export default RequestObject

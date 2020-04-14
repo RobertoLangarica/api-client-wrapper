@@ -144,7 +144,7 @@ class RequestObject {
     }
 }
 
-RequestObject.prototype.Status = {
+RequestObject.Status = {
     waiting:0,
     executing:1,
     completed:2,

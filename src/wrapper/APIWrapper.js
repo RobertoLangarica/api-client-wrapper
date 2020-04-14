@@ -210,7 +210,8 @@ export class APIWrapper {
      * 
      */
     call({method = 'get', url = '', params = {}, data = {}, alias = null, ...rest} = {}){
-        
+        method = method.toLowerCase();
+
         if(!axios[method]){
             console.log(`The specified method: ${method} is not allowed.`)
             // Error if the specified method is invalid

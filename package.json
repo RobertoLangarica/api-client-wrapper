@@ -1,6 +1,6 @@
 {
   "name": "api-client-wrapper",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "Easy to use REST client that manage all the basics out of the box: Response homogenization, bulk calls, simultaneos calls, timeout and error management.",
   "author": "Roberto Langarica <roberto.langarica@gmail.com>",
   "license": "MIT",

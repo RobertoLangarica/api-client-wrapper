@@ -2,6 +2,7 @@ const uuidv4 = require('uuid/v4');
 
 class RequestObject {
     constructor({method = 'get',url = '',attempts = 1, params={},data = {},alias = null, continueWithFailure = false, onProgress = null, ...rest}={}){
+        method = method.toLowerCase();
         this.maxAttempts = attempts < 1 ? 1 : attempts;
         this.attempts = 0;
         this.result = {};

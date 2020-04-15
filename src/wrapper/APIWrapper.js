@@ -372,7 +372,6 @@ export class APIWrapper {
         if(timedOut && request.attempts < request.maxAttempts){
             this.removeRequestFromLists(request.id);
             request.status = RequestObject.Status.waiting;
-            // request.config.timeout = request.config.timeout ? request.config.timeout*10:this._timeout*10;
             this.pendingRequests.push(request);
         } else {
             //Permanent failure

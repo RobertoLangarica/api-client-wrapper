@@ -33,10 +33,14 @@ class RequestObject {
     }
 
     getSubrequestsPayload(){
-        let result = {};
+        let result = [];
         for(let i = 0; i < this.subRequests.length; i++){
             let alias = this.subRequests[i].alias != null ? this.subRequests[i].alias:i;
-            result[alias] = Object.assign({alias:alias}, this.subRequests[i].result); ;  
+            result.push(Object.assign({alias:alias}, this.subRequests[i].result))
+            
+            if(this.subRequests[i].alias != null){
+                result[alias] = result[result.length-1];
+            }
         }
 
         return result;

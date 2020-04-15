@@ -38,7 +38,7 @@ class RequestObject {
             let alias = this.subRequests[i].alias != null ? this.subRequests[i].alias:i;
             result.push(Object.assign({alias:alias}, this.subRequests[i].result))
             
-            if(this.subRequests[i].alias != null){
+            if(this.subRequests[i].alias !== i){
                 result[alias] = result[result.length-1];
             }
         }

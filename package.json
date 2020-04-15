@@ -1,6 +1,6 @@
 {
   "name": "api-client-wrapper",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Easy to use out of the box API wrapper tha use axios as its core",
   "author": "Roberto Langarica <roberto.langarica@gmail.com>",
   "license": "MIT",

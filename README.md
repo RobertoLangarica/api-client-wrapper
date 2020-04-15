@@ -1,7 +1,7 @@
 # api-client-wrapper
 ===
 
-_An easy to use out of the box API wrapper tha use [axios](https://github.com/axios/axios)  in its core_
+_An easy to use out of the box API wrapper that use [axios](https://github.com/axios/axios)  in its core_
 
 This package was designed to wrap up the most common features of an api client implementation, in an effort to have a quick and stable tool for each project.
 

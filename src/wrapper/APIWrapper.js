@@ -485,7 +485,7 @@ export class APIWrapper {
     }
 
     getComputedPath(path){
-        let result = path.toLowerCase();
+        let result = path;
         
         //Do the provided path is relative and need the base URL?
         if(result.indexOf('http') != 0){

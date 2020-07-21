@@ -1,7 +1,7 @@
-const uuidv4 = require('uuid/v4');
+import { v4 as uuidv4 } from 'uuid'
 
 class RequestObject {
-    constructor({method = 'get',url = '',attempts = 1, params={},data = {},alias = null, continueWithFailure = false, onProgress = null, ...rest}={}){
+    constructor({ method = 'get', url = '', attempts = 1, params = {}, data = {}, alias = null, continueWithFailure = false, onProgress = null, ...rest } = {}) {
         method = method.toLowerCase();
         this.maxAttempts = attempts < 1 ? 1 : attempts;
         this.attempts = 0;
@@ -18,7 +18,7 @@ class RequestObject {
         /*****************/
 
         //La url se completa despues
-        this.config = Object.assign(rest, {method:this.method, params:this.params, data:this.data}); 
+        this.config = Object.assign(rest, { method: this.method, params: this.params, data: this.data });
         this.id = uuidv4();
         this.mainPromise = new Promise(this.promiseResolver.bind(this));
         this.isSubRequest = false;
@@ -26,27 +26,27 @@ class RequestObject {
         this.subRequests = [];
     }
 
-    addSubRequest(request){
+    addSubRequest(request) {
         request.parentId = this.id;
         request.isSubRequest = true;
         this.subRequests.push(request);
     }
 
-    getSubrequestsPayload(){
+    getSubrequestsPayload() {
         let result = [];
-        for(let i = 0; i < this.subRequests.length; i++){
-            let alias = this.subRequests[i].alias != null ? this.subRequests[i].alias:i;
-            result.push(Object.assign({alias:alias}, this.subRequests[i].result))
-            
-            if(this.subRequests[i].alias !== i){
-                result[alias] = result[result.length-1];
+        for (let i = 0; i < this.subRequests.length; i++) {
+            let alias = this.subRequests[i].alias != null ? this.subRequests[i].alias : i;
+            result.push(Object.assign({ alias: alias }, this.subRequests[i].result))
+
+            if (this.subRequests[i].alias !== i) {
+                result[alias] = result[result.length - 1];
             }
         }
 
         return result;
     }
 
-    updateStatusBySubRequests(){
+    updateStatusBySubRequests() {
         /**
          * When continueWithFailure == false
          * -If any children is failed then the complete request is failed
@@ -60,36 +60,16 @@ class RequestObject {
          *      -If any children is failed then the complete request is failed
          * 
         **/
-       let completedCount = 0;
-       let failed = false;
+        let completedCount = 0;
+        let failed = false;
 
-       if(!this.continueWithFailure){
-           for(let i = 0; i < this.subRequests.length; i++){
-               if(this.subRequests[i].status == RequestObject.Status.failed){
-                   // Failed
-                   this.status = RequestObject.Status.failed;
-                   break;
-               } else if(this.subRequests[i].status == RequestObject.Status.completed){
-                   completedCount++;
-               } else {
-                   // Waiting
-                   this.status = RequestObject.Status.waiting;
-                   break;
-               }
-           }
-
-           if(completedCount == this.subRequests.length){
-                // Completed
-                this.status = RequestObject.Status.completed;
-            }
-       } else {
-           
-            for(let i = 0; i < this.subRequests.length; i++){
-                if(this.subRequests[i].status == RequestObject.Status.failed){
+        if (!this.continueWithFailure) {
+            for (let i = 0; i < this.subRequests.length; i++) {
+                if (this.subRequests[i].status == RequestObject.Status.failed) {
                     // Failed
-                    failed = true;
-                    completedCount++;
-                } else if(this.subRequests[i].status == RequestObject.Status.completed){
+                    this.status = RequestObject.Status.failed;
+                    break;
+                } else if (this.subRequests[i].status == RequestObject.Status.completed) {
                     completedCount++;
                 } else {
                     // Waiting
@@ -98,50 +78,70 @@ class RequestObject {
                 }
             }
 
-            if(completedCount == this.subRequests.length){
+            if (completedCount == this.subRequests.length) {
+                // Completed
+                this.status = RequestObject.Status.completed;
+            }
+        } else {
+
+            for (let i = 0; i < this.subRequests.length; i++) {
+                if (this.subRequests[i].status == RequestObject.Status.failed) {
+                    // Failed
+                    failed = true;
+                    completedCount++;
+                } else if (this.subRequests[i].status == RequestObject.Status.completed) {
+                    completedCount++;
+                } else {
+                    // Waiting
+                    this.status = RequestObject.Status.waiting;
+                    break;
+                }
+            }
+
+            if (completedCount == this.subRequests.length) {
                 this.status = failed ? RequestObject.Status.failed : RequestObject.Status.completed;
             }
-       }
+        }
     }
 
     /**
      * Report progress in the range [0-1]
      */
-    updateSubrequestsProgress(){
+    updateSubrequestsProgress() {
         let completedCount = 0.0;
-        for(let i = 0; i < this.subRequests.length; i++){
-            if(this.subRequests[i].status == RequestObject.Status.failed || this.subRequests[i].status == RequestObject.Status.completed){
+        for (let i = 0; i < this.subRequests.length; i++) {
+            if (this.subRequests[i].status == RequestObject.Status.failed || this.subRequests[i].status == RequestObject.Status.completed) {
                 // Failed or completed
                 completedCount++;
             }
         }
 
-        this.progress = completedCount/this.subRequests.length;
-        
-        if(this.onProgress){
+        this.progress = completedCount / this.subRequests.length;
+
+        if (this.onProgress) {
             this.onProgress(this.progress);
         }
     }
 
-    promiseResolver(resolve, reject){
+    promiseResolver(resolve, reject) {
         this.resolvePromise = resolve;
         this.rejectPromise = reject;
     }
 
-    resolve(result){
+    resolve(result) {
         result.attempts = this.attempts;
-        if(this.alias != null){
-            this.result = Object.assign({alias:this.alias}, result);
+        if (this.alias != null) {
+            this.result = Object.assign({ alias: this.alias }, result);
         } else {
             this.result = result;
         }
         this.resolvePromise(this.result);
     }
 
-    reject(result){
+    reject(result) {
         result.attempts = this.attempts;
-        if(this.alias != null){
-            this.result = Object.assign({alias:this.alias}, result);
+        if (this.alias != null) {
+            this.result = Object.assign({ alias: this.alias }, result);
         } else {
             this.result = result;
         }
@@ -150,10 +150,10 @@ class RequestObject {
 }
 
 RequestObject.Status = {
-    waiting:0,
-    executing:1,
-    completed:2,
-    failed:3
+    waiting: 0,
+    executing: 1,
+    completed: 2,
+    failed: 3
 }
 
 export default RequestObject

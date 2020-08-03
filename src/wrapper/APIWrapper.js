@@ -1,511 +1,312 @@
-import axios from 'axios';
-import RequestObject from './RequestObject';
-import api_state from '../store/WrapperState'
-
-/**
- * Object retrieved with each call
- * {
- * success:Boolean true/false depending on result
- * attempts:Number of attepts to call this request
- * data:(Data retrieved from the endpoint if the call was successfull)
- * info:String Info if an error ocurred
- * error:Error an error if ocurred
- * }
- * 
- * NOTE: In the case of a Bulk Call the data is an array containing a response for each call
- */
-export class APIWrapper {
-    constructor({maxAttemptsPerCall = 1, 
-                baseURL = '',
-                contentType = 'application/json',
-                timeout = 10000,
-                authorization = '', 
-                simultaneousCalls = 5,
-                ...config}={}){
-
-        this.maxAttemptsPerCall = maxAttemptsPerCall < 1 ? 1 : maxAttemptsPerCall;
-        this.baseURL = baseURL;
-        this._timeout = timeout < 0 ? 0:timeout;
-        this.simultaneousCalls = simultaneousCalls <= 0 ? 1 : simultaneousCalls;
-        /*
-        baseURL is not send as default config to allow raw calls to custom URL's
-        @see call method
-        */
-        this.axiosInstance = axios.create(Object.assign(config,{timeout:this._timeout}));
-        
-        this.setContentType(contentType);
-        this.setAuthorization(authorization);
-
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.APIWrapper = void 0;
+const axios_1 = require("axios");
+const RequestObject_1 = require("./RequestObject");
+const WrapperState_1 = require("../store/WrapperState");
+class APIWrapper {
+    constructor(options = {}) {
+        this._timeout = 0;
+        this.store = undefined;
+        this.maxAttemptsPerCall = options.maxAttemptsPerCall ? (options.maxAttemptsPerCall < 1 ? 1 : options.maxAttemptsPerCall) : 1;
+        delete options.maxAttemptsPerCall;
+        this.baseURL = options.baseURL || '';
+        delete options.baseURL;
+        this.timeout = options.timeout ? (options.timeout < 0 ? 0 : options.timeout) : 0;
+        this.simultaneousCalls = options.simultaneousCalls ? (options.simultaneousCalls <= 0 ? 1 : options.simultaneousCalls) : 1;
+        delete options.simultaneousCalls;
+        this.axiosInstance = axios_1.default.create(options);
+        this.setContentType(options.contentType || 'application/json');
+        this.setAuthorization(options.authorization || '');
         this.pendingRequests = [];
         this.bulkRequests = [];
         this.executingRequests = [];
-
-        /**Vuex (used with quasar version)*/
-        this.store = undefined;
-        /********/
         this.uploading = false;
         this.downloading = false;
         this.working = false;
     }
-
-    set timeout(value){
+    set timeout(value) {
         this._timeout = value;
-
-        if(this.axiosInstance){
+        if (this.axiosInstance) {
             this.axiosInstance.defaults.timeout = value;
         }
     }
-
-    get timeout(){
+    get timeout() {
         return this._timeout;
     }
-
-    createResponse({success = false, attempts = 0, data = {}, info = "", error = null, ...rest} = {}){
-        return Object.assign({ success:success, attempts:attempts, data:data, info:info, error:error }, rest);
+    createResponse(options = {}) {
+        let response = {
+            success: options.success !== undefined ? options.success : false,
+            attempts: options.attempts || 0,
+            data: options.data || {},
+            error_info: options.error_info || '',
+            error: options.error || null
+        };
+        return response;
     }
-
-    commit(commitType,value){
-        if(this.store){
-            this.store.commit(commitType,value);
+    commit(commitCmd, value) {
+        if (this.store) {
+            this.store.commit(commitCmd, value);
         }
     }
-
-    /**
-     * 
-     * @param {*} path 
-     * @param {*} conf
-     */
-    get(path='', conf = {}){
-        if(Array.isArray(path)){
-            console.warn('It seems that you are providing an array of paths, try using bulkGet')
-            path = '';
-        }
-        return this.call(Object.assign(conf,{method:'get',url:path}));
+    get(path = '', conf) {
+        conf = conf || {};
+        return this.call(Object.assign(conf, { method: 'get', url: path }));
     }
-
-    /**
-     * 
-     * @param {*} requests =[path:string] || [conf:{}]
-     * @param {*} continueWithFailure:Boolean 
-     *          false:The bulk call fails with the first request that fail. 
-     *          true: The bulk call continue until each sub request is completed or failed.
-     */
-    bulkGet(requests = [],continueWithFailure = false, onProgress = null){return this.bulkDecorator(requests, continueWithFailure, onProgress, 'get');}
-
-
-    /**
-     * 
-     * @param {*} path 
-     * @param {*} data 
-     * @param {*} conf 
-     */
-    post(path='', data = {}, conf = {}){
-        if(Array.isArray(path)){
-            console.warn('It seems that you are providing an array of paths, try using bulkPost')
-            path = '';
-        }
-        return this.call(Object.assign(conf,{method:'post',url:path, data:data}));
+    bulkGet(requests = [], continueWithFailure = false, onProgress = null) {
+        return this.bulkDecorator(requests, continueWithFailure, onProgress, 'get');
     }
-
-    /**
-     * 
-     * @param {*} requests =[path:string] || [conf:{}]
-     * @param {*} continueWithFailure:Boolean 
-     *          false:The bulk call fails with the first request that fail. 
-     *          true: The bulk call continue until each sub request is completed or failed.
-     */
-    bulkPost(requests = [],continueWithFailure = false, onProgress = null){return this.bulkDecorator(requests, continueWithFailure, onProgress, 'post');}
-    
-    /**
-     * 
-     * @param {*} path 
-     * @param {*} data 
-     * @param {*} conf 
-     */
-    patch(path='', data = {}, conf = {}){
-        if(Array.isArray(path)){
-            console.warn('It seems that you are providing an array of paths, try using bulkPatch')
-            path = '';
-        }
-        return this.call(Object.assign(conf,{method:'patch',url:path, data:data}));
+    post(path = '', data, conf) {
+        conf = conf || {};
+        return this.call(Object.assign(conf, { method: 'post', url: path, data: data }));
     }
-    /**
-     * 
-     * @param {*} requests =[path:string] || [conf:{}]
-     * @param {*} continueWithFailure:Boolean 
-     *          false:The bulk call fails with the first request that fail. 
-     *          true: The bulk call continue until each sub request is completed or failed.
-     */
-    bulkPatch(requests = [],continueWithFailure = false, onProgress = null){return this.bulkDecorator(requests, continueWithFailure, onProgress, 'patch');}
-
-    /**
-     * 
-     * @param {*} path 
-     * @param {*} data 
-     * @param {*} conf 
-     */
-    put(path='', data = {}, conf = {}){
-        if(Array.isArray(path)){
-            console.warn('It seems that you are providing an array of paths, try using bulkPut')
-            path = '';
-        }
-        return this.call(Object.assign(conf,{method:'put',url:path, data:data}));
+    bulkPost(requests = [], continueWithFailure = false, onProgress = null) {
+        return this.bulkDecorator(requests, continueWithFailure, onProgress, 'post');
     }
-    /**
-     * 
-     * @param {*} requests =[path:string] || [conf:{}]
-     * @param {*} continueWithFailure:Boolean 
-     *          false:The bulk call fails with the first request that fail. 
-     *          true: The bulk call continue until each sub request is completed or failed.
-     */
-    bulkPut(requests = [],continueWithFailure = false, onProgress = null){return this.bulkDecorator(requests, continueWithFailure, onProgress, 'put');}
-
-    /**
-     * 
-     * @param {*} path 
-     * @param {*} conf
-     */
-    delete(path='', conf = {}){
-        if(Array.isArray(path)){
-            console.warn('It seems that you are providing an array of paths, try using bulkDelete')
-            path = '';
-        }
-        return this.call(Object.assign(conf,{method:'delete',url:path}));
+    patch(path = '', data, conf) {
+        conf = conf || {};
+        return this.call(Object.assign(conf, { method: 'patch', url: path, data: data }));
     }
-
-    /**
-     * 
-     * @param {*} requests =[path:string] || [conf:{}]
-     * @param {*} continueWithFailure:Boolean 
-     *          false:The bulk call fails with the first request that fail. 
-     *          true: The bulk call continue until each sub request is completed or failed.
-     */
-    bulkDelete(requests = [],continueWithFailure = false, onProgress = null){return this.bulkDecorator(requests, continueWithFailure, onProgress, 'delete');}
-
-    /**
-     * 
-     * @param {*} requests =[path:string] || [conf:{}]
-     * @param {*} continueWithFailure:Boolean 
-     *          false:The bulk call fails with the first request that fail. 
-     *          true: The bulk call continue until each sub request is completed or failed.
-     */
-    bulkDecorator(requests = [], continueWithFailure = false, onProgress = null, method){
+    bulkPatch(requests = [], continueWithFailure = false, onProgress = null) {
+        return this.bulkDecorator(requests, continueWithFailure, onProgress, 'patch');
+    }
+    put(path = '', data, conf) {
+        conf = conf || {};
+        return this.call(Object.assign(conf, { method: 'put', url: path, data: data }));
+    }
+    bulkPut(requests = [], continueWithFailure = false, onProgress = null) {
+        return this.bulkDecorator(requests, continueWithFailure, onProgress, 'put');
+    }
+    delete(path = '', conf) {
+        conf = conf || {};
+        return this.call(Object.assign(conf, { method: 'delete', url: path }));
+    }
+    bulkDelete(requests = [], continueWithFailure = false, onProgress = null) {
+        return this.bulkDecorator(requests, continueWithFailure, onProgress, 'delete');
+    }
+    bulkDecorator(requests = [], continueWithFailure = false, onProgress = null, method) {
         let result = [];
-        requests.forEach(request=>{
-            if(typeof request === 'string'){
-                // Only path
-                result.push({method:method,url:request});
-            } else if (typeof request === 'object'){
-                // Config
-                let url = request.url !== undefined ? request.url : request.path !== undefined ? request.path : '';
-                result.push(Object.assign(request,{method:method,url:url}));
+        requests.forEach((request) => {
+            if (typeof request === 'string') {
+                result.push({ method: method, url: request });
             }
-        })
+            else if (typeof request === 'object') {
+                request.url = request.url || '';
+                request.method = method;
+                result.push(request);
+            }
+        });
         return this.bulkCall(result, continueWithFailure, onProgress);
     }
-
-    /**
-     * -Call receive the complete axios configuration (see axios request configuration)
-     * -Call receive also the compelte configuration for RequestObject
-     * 
-     */
-    call({method = 'get', url = '', params = {}, data = {}, alias = null, ...rest} = {}){
-        method = method.toLowerCase();
-
-        if(!axios[method]){
-            console.log(`The specified method: ${method} is not allowed.`)
-            // Error if the specified method is invalid
-            let error = new Error(`The specified method: ${method} is not allowed.`)
-            return Promise.resolve(this.createResponse({success:false,info:error.message,error:error}));
+    call(options = {}) {
+        options.method = options.method || 'get';
+        options.url = options.url || '';
+        let method = options.method.toLowerCase();
+        if (!axios_1.default[method]) {
+            console.log(`The specified method: ${method} is not allowed.`);
+            let error = new Error(`The specified method: ${method} is not allowed.`);
+            return Promise.resolve(this.createResponse({ success: false, error_info: error.message, error: error }));
         }
-
-        let request = this.getRequestObject(Object.assign({
-                                        method:method,
-                                        url:url, 
-                                        params:params, 
-                                        data:data, 
-                                        attempts:this.maxAttemptsPerCall,
-                                        alias: alias
-                                        },rest));
-        
+        options.attempts = this.maxAttemptsPerCall;
+        let request = this.getRequestObject(options);
         this.pendingRequests.push(request);
-        this.commit('setRequestsCount',this.pendingRequests.length+this.executingRequests.length);
-        
+        this.commit('setRequestsCount', this.pendingRequests.length + this.executingRequests.length);
         this.executeNextRequest();
-
         return request.mainPromise;
     }
-
-    /**
-     * 
-     * @param {*} configs:[] Array of config for each call
-     * @param {*} continueWithFailure:Boolean 
-     *          false:The bulk call fails with the first request that fail. 
-     *          true: The bulk call continue until each sub request is completed or failed.
-     */
-    bulkCall(configs = [],continueWithFailure = false, onProgress = null){
+    bulkCall(configs, continueWithFailure, onProgress) {
         let invalidMethod = false;
-        let invalidMethodInfo;
+        let invalidMethodInfo = '';
         let children = [];
-        let parent = this.getRequestObject({continueWithFailure:continueWithFailure,onProgress:onProgress});
-
-        configs.forEach(c=>{
+        let parent = this.getRequestObject({ continueWithFailure: continueWithFailure, onProgress: onProgress });
+        configs.forEach(c => {
             let request = this.getRequestObject(c);
-
-            if(!axios[request.method]){
-                // Error if the specified method is invalid
+            if (!axios_1.default[request.method]) {
                 invalidMethod = true;
                 invalidMethodInfo = request.method;
             }
             children.push(request);
         });
-
-        if(invalidMethod){
-            let error = new Error(`The specified method: ${invalidMethodInfo} is not allowed.`)
-            return Promise.resolve(this.createResponse({success:false,info:error.message,error:error}));
-        } else {
+        if (invalidMethod) {
+            let error = new Error(`The specified method: ${invalidMethodInfo} is not allowed.`);
+            return Promise.resolve(this.createResponse({ success: false, error_info: error.message, error: error }));
+        }
+        else {
             children.forEach(request => {
-                //Added to its parent
                 parent.addSubRequest(request);
-
-                //Empty result
                 request.result = this.createResponse();
-                
-                //Added to the pending list
                 this.pendingRequests.push(request);
-                this.commit('setRequestsCount',this.pendingRequests.length+this.executingRequests.length);
-            })
-
-            //Parent added to the bulk list
+                this.commit('setRequestsCount', this.pendingRequests.length + this.executingRequests.length);
+            });
             this.bulkRequests.push(parent);
-    
             this.executeNextRequest();
-    
             return parent.mainPromise;
         }
     }
-
-    getBulkRequestById(id){
-        return this.bulkRequests.find(r=>r.id == id);
+    getBulkRequestById(id) {
+        return this.bulkRequests.find(r => r.id == id);
     }
-
-    getRequestObject(config){
-        return new RequestObject(config);
+    getRequestObject(config) {
+        return new RequestObject_1.default(config);
     }
-
-    executeNextRequest(){
-        if(this.pendingRequests.length == 0){
-            // Nothing to call
+    executeNextRequest() {
+        if (this.pendingRequests.length == 0) {
             return;
         }
-        
-        if(this.executingRequests.length >= this.simultaneousCalls){
-            // No more concurrent calls allowed
+        if (this.executingRequests.length >= this.simultaneousCalls) {
             return;
         }
-
         let next = this.pendingRequests.shift();
-        next.status = RequestObject.Status.executing;
+        next.status = RequestObject_1.RequestStatus.EXECUTING;
         next.attempts++;
         this.executingRequests.push(next);
-        this.commit('setRequestsExecutingCount',this.executingRequests.length);
+        this.commit('setRequestsExecutingCount', this.executingRequests.length);
         this.updateWorkingStatus();
-
-        let config = Object.assign({url: this.getComputedPath(next.url)},next.config);
-
-        //Remote call
+        let config = Object.assign({ url: this.getComputedPath(next.url) }, next.config);
         this.axiosInstance(config)
-        .then(result=>{
+            .then((result) => {
             this.evaluateRemoteResponse(next.id, result);
         })
-        .catch(error=>{
+            .catch((error) => {
             this.evaluateRemoteError(next.id, error);
-        })
-
-        //Recursive call until no more concurrent calls could be made
+        });
         this.executeNextRequest();
     }
-
-    evaluateRemoteResponse(requestId,remoteResult){
-        let request = this.executingRequests.find(r=>r.id == requestId);
-
-        // There is not executing request matching this one (could be a bulk call remanent)
-        if(!request){
+    evaluateRemoteResponse(requestId, remoteResult) {
+        let request = this.executingRequests.find(r => r.id == requestId);
+        if (!request) {
             this.executeNextRequest();
             return;
         }
-
-        //Evaluate response
         let successfull = false;
-        if(remoteResult.status >= 200 && remoteResult.status < 300){
+        if (remoteResult.status >= 200 && remoteResult.status < 300) {
             successfull = true;
         }
-
-        request.status = RequestObject.Status.completed;
-        let result =  this.createResponse(Object.assign({success:successfull}, remoteResult));
-        this.requestCompletion(request, result)
-
+        request.status = RequestObject_1.RequestStatus.COMPLETED;
+        let result = this.createResponse(Object.assign({ success: successfull }, remoteResult));
+        this.requestCompletion(request, result);
         this.executeNextRequest();
     }
-    evaluateRemoteError(requestId,error){
-        let request = this.executingRequests.find(r=>r.id == requestId);
-        
-        // There is not executing request matching this one (could be a bulk call remanent)
-        if(!request){
+    evaluateRemoteError(requestId, error) {
+        var _a;
+        let request = this.executingRequests.find(r => r.id == requestId);
+        if (!request) {
             this.executeNextRequest();
             return;
         }
-        
         let timedOut = false;
-        if(error.code == 'ETIMEDOUT' || error.code == 'ECONNABORTED'){
-            if(error.code == 'ECONNABORTED'){
-                // Could be aborted for other reasons
-                if(error.message.includes('timeout')){
+        if (error.code == 'ETIMEDOUT' || error.code == 'ECONNABORTED') {
+            if (error.code == 'ECONNABORTED') {
+                if ((_a = error.message) === null || _a === void 0 ? void 0 : _a.includes('timeout')) {
                     timedOut = true;
                 }
-            } else {
+            }
+            else {
                 timedOut = true;
             }
         }
-
-        // Can be repeated
-        if(timedOut && request.attempts < request.maxAttempts){
+        if (timedOut && request.attempts < request.maxAttempts) {
             this.removeRequestFromLists(request.id);
-            request.status = RequestObject.Status.waiting;
+            request.status = RequestObject_1.RequestStatus.WAITING;
             this.pendingRequests.push(request);
-        } else {
-            //Permanent failure
-            request.status = RequestObject.Status.failed;
-            let result =  this.createResponse(Object.assign(error.response || {} ,{ success:false, info:error.message, error:error }));
-            this.requestCompletion(request, result)
         }
-
+        else {
+            request.status = RequestObject_1.RequestStatus.FAILED;
+            let result = this.createResponse(Object.assign(error.response || {}, { success: false, error_info: error.message, error: error }));
+            this.requestCompletion(request, result);
+        }
         this.executeNextRequest();
     }
-
-    requestCompletion(request, result){
-        // Remove the request from any list
+    requestCompletion(request, result) {
         this.removeRequestFromLists(request.id);
-
         request.resolve(result);
-
-        // Was a subrequest?
-        if(request.isSubRequest){
+        if (request.isSubRequest) {
             this.evaluateBulkCompletion(request.parentId);
         }
-
         this.updateWorkingStatus();
     }
-
-    evaluateBulkCompletion(requestId){
+    evaluateBulkCompletion(requestId) {
         let request = this.getBulkRequestById(requestId);
-
-        if(!request){
-            //No bulk request found
+        if (!request) {
             return;
         }
-
         request.updateStatusBySubRequests();
         request.updateSubrequestsProgress();
-
-        if(request.status == RequestObject.Status.failed || request.status == RequestObject.Status.completed){
-            //Failed or completed
-            let index = this.bulkRequests.findIndex(r=>r.id == request.id);
-            this.bulkRequests.splice(index,1);
-            let success = request.status == RequestObject.Status.failed ? false:true;
-            request.resolve(this.createResponse({success:success,data:request.getSubrequestsPayload()}));
-
-            //Remove any subrequest
-            for(let i = 0; i < request.subRequests.length; i++){
+        if (request.status == RequestObject_1.RequestStatus.FAILED || request.status == RequestObject_1.RequestStatus.COMPLETED) {
+            let index = this.bulkRequests.findIndex(r => r.id == request.id);
+            this.bulkRequests.splice(index, 1);
+            let success = request.status == RequestObject_1.RequestStatus.FAILED ? false : true;
+            request.resolve(this.createResponse({ success: success, data: request.getSubrequestsPayload() }));
+            for (let i = 0; i < request.subRequests.length; i++) {
                 this.removeRequestFromLists(request.subRequests[i].id);
             }
         }
     }
-
-    updateWorkingStatus(){
+    updateWorkingStatus() {
         let uploading = false;
         let downloading = false;
         let working;
-
-        for(let i = 0; i < this.executingRequests.length; i++){
-            if(this.executingRequests[i].method == 'get'){
+        for (let i = 0; i < this.executingRequests.length; i++) {
+            if (this.executingRequests[i].method == 'get') {
                 downloading = true;
-            } else {
+            }
+            else {
                 uploading = true;
             }
-
-            if(uploading && downloading){break;}
+            if (uploading && downloading) {
+                break;
+            }
         }
-        
         working = uploading || downloading;
-        
-        // Commit only if the state change
-        if(this.working != working){
+        if (this.working != working) {
             this.working = working;
-            this.commit('setWorking',this.working);
+            this.commit('setWorking', this.working);
         }
-        
-        if(this.uploading != uploading){
+        if (this.uploading != uploading) {
             this.uploading = uploading;
-            this.commit('setUploading',this.uploading);
+            this.commit('setUploading', this.uploading);
         }
-        
-        if(this.downloading != downloading){
+        if (this.downloading != downloading) {
             this.downloading = downloading;
-            this.commit('setDownloading',this.downloading);
+            this.commit('setDownloading', this.downloading);
         }
     }
-
-    removeRequestFromLists(id){
-        let index = this.pendingRequests.findIndex(r=>r.id == id);
-        if(index >= 0){this.pendingRequests.splice(index,1);}
-        
-        index = this.executingRequests.findIndex(r=>r.id == id);
-        if(index >= 0){this.executingRequests.splice(index,1);}
-
-        this.commit('setRequestsCount',this.pendingRequests.length+this.executingRequests.length);
-        this.commit('setRequestsExecutingCount',this.executingRequests.length);
-    }
-
-    setContentType(type){
-        if(type){
-            this.axiosInstance.defaults.headers.post['Content-Type'] = type;
-            this.axiosInstance.defaults.headers.patch['Content-Type'] = type;
-            this.axiosInstance.defaults.headers.put['Content-Type'] = type;
+    removeRequestFromLists(id) {
+        let index = this.pendingRequests.findIndex(r => r.id == id);
+        if (index >= 0) {
+            this.pendingRequests.splice(index, 1);
         }
+        index = this.executingRequests.findIndex(r => r.id == id);
+        if (index >= 0) {
+            this.executingRequests.splice(index, 1);
+        }
+        this.commit('setRequestsCount', this.pendingRequests.length + this.executingRequests.length);
+        this.commit('setRequestsExecutingCount', this.executingRequests.length);
     }
-
-    /**
-     * 
-     * @param {*} token 
-     * @param {*} type
-     */
-    setAuthorization(token, type = 'Bearer'){
+    setContentType(type) {
+        this.axiosInstance.defaults.headers.post['Content-Type'] = type;
+        this.axiosInstance.defaults.headers.patch['Content-Type'] = type;
+        this.axiosInstance.defaults.headers.put['Content-Type'] = type;
+    }
+    setAuthorization(token, type = 'Bearer') {
+        token = token.trim();
+        type = type.trim();
         this.axiosInstance.defaults.headers.common['Authorization'] = `${type} ${token}`;
     }
-
-    getComputedPath(path){
+    getComputedPath(path) {
         let result = path;
-        
-        //Do the provided path is relative and need the base URL?
-        if(result.indexOf('http') != 0){
+        if (result.indexOf('http') != 0) {
             result = this.baseURL + result;
-        } 
-
+        }
         return result;
     }
-
-    /**
-     * Register the APIWrapper module so it can be use in applications that implement Vuex
-     * @param {*} store 
-     */
-    setStore(store){
-        this.store = (store !== undefined && store !== null) ? store:undefined;
-
-        if(this.store){
-            this.store.registerModule('APIwrapper',api_state);
+    setStore(store) {
+        this.store = (store !== undefined && store !== null) ? store : undefined;
+        if (this.store) {
+            this.store.registerModule('APIwrapper', WrapperState_1.default);
         }
     }
 }
-
-export default new APIWrapper();
+exports.APIWrapper = APIWrapper;
+exports.default = new APIWrapper();
+//# sourceMappingURL=APIWrapper.js.map

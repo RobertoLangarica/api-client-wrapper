@@ -1,159 +1,118 @@
-import { v4 as uuidv4 } from 'uuid'
-
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.RequestStatus = void 0;
+const uuid_1 = require("uuid");
+var RequestStatus;
+(function (RequestStatus) {
+    RequestStatus[RequestStatus["WAITING"] = 0] = "WAITING";
+    RequestStatus[RequestStatus["EXECUTING"] = 1] = "EXECUTING";
+    RequestStatus[RequestStatus["COMPLETED"] = 2] = "COMPLETED";
+    RequestStatus[RequestStatus["FAILED"] = 3] = "FAILED";
+})(RequestStatus = exports.RequestStatus || (exports.RequestStatus = {}));
 class RequestObject {
-    constructor({ method = 'get', url = '', attempts = 1, params = {}, data = {}, alias = null, continueWithFailure = false, onProgress = null, ...rest } = {}) {
-        method = method.toLowerCase();
-        this.maxAttempts = attempts < 1 ? 1 : attempts;
+    constructor(options = {}) {
+        var _a;
+        this.progress = 0;
+        this.maxAttempts = options.attempts ? (options.attempts < 1 ? 1 : options.attempts) : 1;
+        delete options.attempts;
         this.attempts = 0;
         this.result = {};
-        this.alias = alias;
-        this.continueWithFailure = continueWithFailure; //Used in bulk calls. false: The nulkCall fails with the first subrequest that fails, true: Continue until all the calls complete
-        this.onProgress = onProgress; //Used in bulk calls to report progress
+        this.alias = options.alias;
+        delete options.alias;
+        this.continueWithFailure = options.continueWithFailure || false;
+        delete options.continueWithFailure;
+        this.onProgress = options.onProgress;
+        delete options.onProgress;
         this.progress = 0;
-        /**Axios related */
-        this.url = url;
-        this.method = method.toLowerCase();
-        this.data = data;
-        this.params = params;
-        /*****************/
-
-        //La url se completa despues
-        this.config = Object.assign(rest, { method: this.method, params: this.params, data: this.data });
-        this.id = uuidv4();
+        this.url = options.url || '';
+        delete options.url;
+        this.method = ((_a = options.method) === null || _a === void 0 ? void 0 : _a.toLowerCase()) || 'get';
+        this.data = options.data;
+        this.params = options.params || {};
+        this.config = options;
+        this.id = uuid_1.v4();
         this.mainPromise = new Promise(this.promiseResolver.bind(this));
         this.isSubRequest = false;
-        this.status = RequestObject.Status.waiting;
+        this.status = RequestStatus.WAITING;
         this.subRequests = [];
     }
-
     addSubRequest(request) {
         request.parentId = this.id;
         request.isSubRequest = true;
         this.subRequests.push(request);
     }
-
     getSubrequestsPayload() {
-        let result = [];
+        let result = new Map();
         for (let i = 0; i < this.subRequests.length; i++) {
-            let alias = this.subRequests[i].alias != null ? this.subRequests[i].alias : i;
-            result.push(Object.assign({ alias: alias }, this.subRequests[i].result))
-
-            if (this.subRequests[i].alias !== i) {
-                result[alias] = result[result.length - 1];
-            }
+            let alias = this.subRequests[i].alias || String(i);
+            let subRequestResult = Object.assign({}, this.subRequests[i].result);
+            subRequestResult.alias = alias;
+            result.set(alias, subRequestResult);
         }
-
         return result;
     }
-
     updateStatusBySubRequests() {
-        /**
-         * When continueWithFailure == false
-         * -If any children is failed then the complete request is failed
-         * -If any child is executing or waiting then the request is waiting
-         * -If all the children are completed then the request is completed
-         * 
-         * When continueWithFailure == true
-         * -If any child is executing or waiting then the request is waiting
-         * -When no children is executing or waiting then:
-         *      -If all the children are completed then the request is completed
-         *      -If any children is failed then the complete request is failed
-         * 
-        **/
         let completedCount = 0;
         let failed = false;
-
         if (!this.continueWithFailure) {
             for (let i = 0; i < this.subRequests.length; i++) {
-                if (this.subRequests[i].status == RequestObject.Status.failed) {
-                    // Failed
-                    this.status = RequestObject.Status.failed;
+                if (this.subRequests[i].status == RequestStatus.FAILED) {
+                    this.status = RequestStatus.FAILED;
                     break;
-                } else if (this.subRequests[i].status == RequestObject.Status.completed) {
+                }
+                else if (this.subRequests[i].status == RequestStatus.COMPLETED) {
                     completedCount++;
-                } else {
-                    // Waiting
-                    this.status = RequestObject.Status.waiting;
+                }
+                else {
+                    this.status = RequestStatus.WAITING;
                     break;
                 }
             }
-
             if (completedCount == this.subRequests.length) {
-                // Completed
-                this.status = RequestObject.Status.completed;
+                this.status = RequestStatus.COMPLETED;
             }
-        } else {
-
+        }
+        else {
             for (let i = 0; i < this.subRequests.length; i++) {
-                if (this.subRequests[i].status == RequestObject.Status.failed) {
-                    // Failed
+                if (this.subRequests[i].status == RequestStatus.FAILED) {
                     failed = true;
                     completedCount++;
-                } else if (this.subRequests[i].status == RequestObject.Status.completed) {
+                }
+                else if (this.subRequests[i].status == RequestStatus.COMPLETED) {
                     completedCount++;
-                } else {
-                    // Waiting
-                    this.status = RequestObject.Status.waiting;
+                }
+                else {
+                    this.status = RequestStatus.WAITING;
                     break;
                 }
             }
-
             if (completedCount == this.subRequests.length) {
-                this.status = failed ? RequestObject.Status.failed : RequestObject.Status.completed;
+                this.status = failed ? RequestStatus.FAILED : RequestStatus.COMPLETED;
             }
         }
     }
-
-    /**
-     * Report progress in the range [0-1]
-     */
     updateSubrequestsProgress() {
         let completedCount = 0.0;
         for (let i = 0; i < this.subRequests.length; i++) {
-            if (this.subRequests[i].status == RequestObject.Status.failed || this.subRequests[i].status == RequestObject.Status.completed) {
-                // Failed or completed
+            if (this.subRequests[i].status == RequestStatus.FAILED || this.subRequests[i].status == RequestStatus.COMPLETED) {
                 completedCount++;
             }
         }
-
         this.progress = completedCount / this.subRequests.length;
-
         if (this.onProgress) {
             this.onProgress(this.progress);
         }
     }
-
     promiseResolver(resolve, reject) {
         this.resolvePromise = resolve;
         this.rejectPromise = reject;
     }
-
-    resolve(result) {
-        result.attempts = this.attempts;
-        if (this.alias != null) {
-            this.result = Object.assign({ alias: this.alias }, result);
-        } else {
-            this.result = result;
-        }
+    resolve(remoteResult) {
+        Object.assign(this.result, remoteResult);
+        this.result.alias = this.alias;
+        this.result.attempts = this.attempts;
         this.resolvePromise(this.result);
     }
-
-    reject(result) {
-        result.attempts = this.attempts;
-        if (this.alias != null) {
-            this.result = Object.assign({ alias: this.alias }, result);
-        } else {
-            this.result = result;
-        }
-        this.rejectPromise(this.result);
-    }
 }
-
-RequestObject.Status = {
-    waiting: 0,
-    executing: 1,
-    completed: 2,
-    failed: 3
-}
-
-export default RequestObject
+exports.default = RequestObject;
+//# sourceMappingURL=RequestObject.js.map

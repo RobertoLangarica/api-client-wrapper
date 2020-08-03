@@ -1,0 +1,18 @@
+{
+    "compilerOptions": {
+        "allowJs": true,
+        "removeComments": true,
+        "baseUrl": "./",
+        "experimentalDecorators": true,
+        "incremental": true,
+        "sourceMap": true,
+        "declaration": true,
+        "strict": true,
+        "target": "ES2017",
+        "module": "CommonJS",
+        "outDir": "dist"
+    },
+    "exclude": [
+        "node_modules"
+    ]
+}

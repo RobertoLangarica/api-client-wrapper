@@ -1,7 +1,6 @@
 {
     "compilerOptions": {
         "allowJs": true,
-        "removeComments": true,
         "baseUrl": "./",
         "experimentalDecorators": true,
         "incremental": true,

@@ -76,15 +76,20 @@ export class APIWrapper {
     baseURL: string
     private _timeout: number = 0
     simultaneousCalls: number
-    axiosInstance: any
-    pendingRequests: RequestObject[];
-    bulkRequests: RequestObject[];
-    executingRequests: RequestObject[];
+    private axiosInstance: any
+    private pendingRequests: RequestObject[];
+    private bulkRequests: RequestObject[];
+    private executingRequests: RequestObject[];
     // Vuex instance (used with quasar extension version)
     store: any = undefined;
-    uploading: boolean
-    downloading: boolean
-    working: boolean
+    private _uploading: boolean
+    public get uploading(): boolean { return this._uploading }
+
+    private _downloading: boolean
+    public get downloading(): boolean { return this._downloading }
+
+    private _working: boolean
+    public get working(): boolean { return this._working }
 
     constructor(options: APIWrapperOptions = {}) {
 
@@ -111,9 +116,9 @@ export class APIWrapper {
         this.pendingRequests = [];
         this.bulkRequests = [];
         this.executingRequests = [];
-        this.uploading = false;
-        this.downloading = false;
-        this.working = false;
+        this._uploading = false;
+        this._downloading = false;
+        this._working = false;
     }
 
     set timeout(value: number) {
@@ -129,7 +134,7 @@ export class APIWrapper {
     }
 
 
-    createResponse(options: APIWrapperResponse = {} as any): APIWrapperResponse {
+    private createResponse(options: APIWrapperResponse = {} as any): APIWrapperResponse {
         let response: APIWrapperResponse = {
             success: options.success !== undefined ? options.success : false,
             attempts: options.attempts || 0,
@@ -142,7 +147,7 @@ export class APIWrapper {
         return response
     }
 
-    commit(commitCmd: string, value: any) {
+    private commit(commitCmd: string, value: any) {
         if (this.store) {
             this.store.commit(commitCmd, value);
         }
@@ -188,7 +193,7 @@ export class APIWrapper {
      *          false:The bulk call fails with the first request that fail. 
      *          true: The bulk call continue until each sub request is completed or failed.
      */
-    public bulkPost(requests: string[] | Object[] = [], continueWithFailure = false, onProgress: { (progress: number): void } | null = null) {
+    public bulkPost(requests: string[] | RequestOptions[] = [], continueWithFailure = false, onProgress: { (progress: number): void } | null = null) {
         return this.bulkDecorator(requests, continueWithFailure, onProgress, 'post');
     }
 
@@ -209,7 +214,7 @@ export class APIWrapper {
      *          false:The bulk call fails with the first request that fail. 
      *          true: The bulk call continue until each sub request is completed or failed.
      */
-    public bulkPatch(requests: string[] | Object[] = [], continueWithFailure = false, onProgress: { (progress: number): void } | null = null) {
+    public bulkPatch(requests: string[] | RequestOptions[] = [], continueWithFailure = false, onProgress: { (progress: number): void } | null = null) {
         return this.bulkDecorator(requests, continueWithFailure, onProgress, 'patch');
     }
 
@@ -230,7 +235,7 @@ export class APIWrapper {
      *          false:The bulk call fails with the first request that fail. 
      *          true: The bulk call continue until each sub request is completed or failed.
      */
-    public bulkPut(requests: string[] | Object[] = [], continueWithFailure = false, onProgress: { (progress: number): void } | null = null) {
+    public bulkPut(requests: string[] | RequestOptions[] = [], continueWithFailure = false, onProgress: { (progress: number): void } | null = null) {
         return this.bulkDecorator(requests, continueWithFailure, onProgress, 'put');
     }
 
@@ -251,7 +256,7 @@ export class APIWrapper {
      *          false:The bulk call fails with the first request that fail. 
      *          true: The bulk call continue until each sub request is completed or failed.
      */
-    public bulkDelete(requests: string[] | Object[] = [], continueWithFailure = false, onProgress: { (progress: number): void } | null = null) {
+    public bulkDelete(requests: string[] | RequestOptions[] = [], continueWithFailure = false, onProgress: { (progress: number): void } | null = null) {
         return this.bulkDecorator(requests, continueWithFailure, onProgress, 'delete');
     }
 
@@ -262,7 +267,7 @@ export class APIWrapper {
      *          false:The bulk call fails with the first request that fail. 
      *          true: The bulk call continue until each sub request is completed or failed.
      */
-    bulkDecorator(requests: string[] | RequestOptions[] = [], continueWithFailure = false, onProgress: { (progress: number): void } | null = null, method: string) {
+    private bulkDecorator(requests: string[] | RequestOptions[] = [], continueWithFailure = false, onProgress: { (progress: number): void } | null = null, method: string) {
         let result: RequestOptions[] = [];
         requests.forEach((request: string | RequestOptions) => {
             if (typeof request === 'string') {
@@ -308,7 +313,7 @@ export class APIWrapper {
      *          false:The bulk call fails with the first request that fail. 
      *          true: The bulk call continue until each sub request is completed or failed.
      */
-    private bulkCall(configs: RequestOptions[], continueWithFailure: boolean, onProgress: { (progress: number): void } | null) {
+    public bulkCall(configs: RequestOptions[], continueWithFailure: boolean, onProgress: { (progress: number): void } | null) {
         let invalidMethod: boolean = false;
         let invalidMethodInfo: string = '';
         let children: RequestObject[] = [];
@@ -350,15 +355,15 @@ export class APIWrapper {
         }
     }
 
-    getBulkRequestById(id: string): RequestObject | undefined {
+    private getBulkRequestById(id: string): RequestObject | undefined {
         return this.bulkRequests.find(r => r.id == id);
     }
 
-    getRequestObject(config: RequestOptions): RequestObject {
+    private getRequestObject(config: RequestOptions): RequestObject {
         return new RequestObject(config);
     }
 
-    executeNextRequest(): void {
+    private executeNextRequest(): void {
         if (this.pendingRequests.length == 0) {
             // Nothing to call
             return;
@@ -391,7 +396,7 @@ export class APIWrapper {
         this.executeNextRequest();
     }
 
-    evaluateRemoteResponse(requestId: string, remoteResult: any) {
+    private evaluateRemoteResponse(requestId: string, remoteResult: any) {
         let request: RequestObject | undefined = this.executingRequests.find(r => r.id == requestId);
 
         // There is not executing request matching this one (could be a bulk call remanent)
@@ -413,7 +418,7 @@ export class APIWrapper {
         this.executeNextRequest();
     }
 
-    evaluateRemoteError(requestId: string, error: any) {
+    private evaluateRemoteError(requestId: string, error: any) {
         let request = this.executingRequests.find(r => r.id == requestId);
 
         // There is not executing request matching this one (could be a bulk call remanent)
@@ -449,7 +454,7 @@ export class APIWrapper {
         this.executeNextRequest();
     }
 
-    requestCompletion(request: RequestObject, result: APIWrapperResponse) {
+    private requestCompletion(request: RequestObject, result: APIWrapperResponse) {
         // Remove the request from any list
         this.removeRequestFromLists(request.id);
 
@@ -463,7 +468,7 @@ export class APIWrapper {
         this.updateWorkingStatus();
     }
 
-    evaluateBulkCompletion(requestId: string) {
+    private evaluateBulkCompletion(requestId: string) {
         let request = this.getBulkRequestById(requestId);
 
         if (!request) {
@@ -488,7 +493,7 @@ export class APIWrapper {
         }
     }
 
-    updateWorkingStatus() {
+    private updateWorkingStatus() {
         let uploading = false;
         let downloading = false;
         let working;
@@ -506,23 +511,23 @@ export class APIWrapper {
         working = uploading || downloading;
 
         // Commit only if the state change
-        if (this.working != working) {
-            this.working = working;
-            this.commit('setWorking', this.working);
+        if (this._working != working) {
+            this._working = working;
+            this.commit('setWorking', this._working);
         }
 
-        if (this.uploading != uploading) {
-            this.uploading = uploading;
-            this.commit('setUploading', this.uploading);
+        if (this._uploading != uploading) {
+            this._uploading = uploading;
+            this.commit('setUploading', this._uploading);
         }
 
-        if (this.downloading != downloading) {
-            this.downloading = downloading;
-            this.commit('setDownloading', this.downloading);
+        if (this._downloading != downloading) {
+            this._downloading = downloading;
+            this.commit('setDownloading', this._downloading);
         }
     }
 
-    removeRequestFromLists(id: string) {
+    private removeRequestFromLists(id: string) {
         let index = this.pendingRequests.findIndex(r => r.id == id);
         if (index >= 0) { this.pendingRequests.splice(index, 1); }
 
@@ -533,7 +538,7 @@ export class APIWrapper {
         this.commit('setRequestsExecutingCount', this.executingRequests.length);
     }
 
-    setContentType(type: string) {
+    public setContentType(type: string) {
         this.axiosInstance.defaults.headers.post['Content-Type'] = type;
         this.axiosInstance.defaults.headers.patch['Content-Type'] = type;
         this.axiosInstance.defaults.headers.put['Content-Type'] = type;
@@ -544,13 +549,13 @@ export class APIWrapper {
      * @param {*} token 
      * @param {*} type
      */
-    setAuthorization(token: string, type = 'Bearer') {
+    public setAuthorization(token: string, type = 'Bearer') {
         token = token.trim()
         type = type.trim()
         this.axiosInstance.defaults.headers.common['Authorization'] = `${type} ${token}`;
     }
 
-    getComputedPath(path: string) {
+    private getComputedPath(path: string) {
         let result = path;
 
         //Do the provided path is relative and need the base URL?
@@ -564,7 +569,7 @@ export class APIWrapper {
     /**
      * Register the APIWrapper module so it can be use in applications that implement Vuex
      */
-    setStore(store: any) {
+    public setStore(store: any) {
         this.store = (store !== undefined && store !== null) ? store : undefined;
 
         if (this.store) {

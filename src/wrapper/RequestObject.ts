@@ -6,22 +6,12 @@ import { APIWrapperResponse } from './APIWrapper'
  * Supports also any other property of axios config
  */
 export interface RequestOptions extends AxiosRequestConfig {
-    method?: "get" | "GET" | "delete" | "DELETE" | "head" | "HEAD" | "options" | "OPTIONS" | "post" | "POST" | "put" | "PUT" | "patch" | "PATCH" | "link" | "LINK" | "unlink" | "UNLINK" | undefined
-
-    url?: string
-
     /**
-     * Request attempts before faling permanently
+     * Attemps that the request should made before failing permanently
      * 
      * Default: 1
      */
     attempts?: number
-
-    /**
-     * Custom params to be send in the request 
-     * Accept any param accepted by axios
-     */
-    params?: any
 
     /**
      * The data to be sent in the request body
@@ -29,7 +19,7 @@ export interface RequestOptions extends AxiosRequestConfig {
     data?: any
 
     /**
-     * A custom alias that will be part of this request so it could be more easily identified
+     * A custom alias that will be part of the response for better identification
      */
     alias?: string
 
@@ -80,8 +70,8 @@ class RequestObject {
     // configuraton for axios call
     config: RequestOptions
     id: string
-    mainPromise: Promise<{ (resolve: (result: any) => void, reject: (arg: any) => void): void }>
-    resolvePromise?: (result: any) => void;
+    mainPromise: Promise<APIWrapperResponse>
+    resolvePromise?: (result: APIWrapperResponse) => void;
     rejectPromise?: (result: any) => void;
 
     isSubRequest: boolean
@@ -134,11 +124,11 @@ class RequestObject {
     }
 
     getSubrequestsPayload() {
-        let result: Map<string, {}> = new Map();
+        let result: Map<string | number, APIWrapperResponse> = new Map();
         for (let i = 0; i < this.subRequests.length; i++) {
-            let alias: string = this.subRequests[i].alias || String(i);
+            let alias: string | number = this.subRequests[i].alias || i;
             let subRequestResult = Object.assign({}, this.subRequests[i].result)
-            subRequestResult.alias = alias // using the one in here since the subrequest could have undefined alias
+            subRequestResult.alias = alias.toString() // using the one in here since the subrequest could have undefined alias
             result.set(alias, subRequestResult)
         }
 
@@ -222,7 +212,7 @@ class RequestObject {
         }
     }
 
-    promiseResolver(resolve: { (value: any): void }, reject: { (reason: any): void }) {
+    promiseResolver(resolve: { (value: APIWrapperResponse): void }, reject: { (reason: any): void }) {
         this.resolvePromise = resolve;
         this.rejectPromise = reject;
     }

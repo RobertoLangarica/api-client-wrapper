@@ -111,7 +111,7 @@ export class APIWrapper {
          * since both are configurations for the axios instance
          */
         this.setContentType(options.contentType || 'application/json');
-        this.setAuthorization(options.authorization || '');
+        if (options.authorization) { this.setAuthorization(options.authorization); }
 
         this.pendingRequests = [];
         this.bulkRequests = [];

@@ -184,6 +184,9 @@ api.setContentType(type = 'application/json')
 // Sets the default authorization header: 'Authorization' for each request
 api.setAuthorization(token, type = 'Bearer')
 
+// Sets any default header that will be used on each request
+api.setHeader(name: string, value:string)
+
 // This will bring the module 'APIwrapper' available and the package will start updating its state
 api.setStore(vuex_instance)
 ```

@@ -555,6 +555,15 @@ export class APIWrapper {
         this.axiosInstance.defaults.headers.common['Authorization'] = `${type} ${token}`;
     }
 
+    /**
+     * 
+     * @param {*} name 
+     * @param {*} value
+     */
+     public setHeader(name: string, value:string) {
+        this.axiosInstance.defaults.headers.common[name] = value;
+    }
+
     private getComputedPath(path: string) {
         let result = path;
 
